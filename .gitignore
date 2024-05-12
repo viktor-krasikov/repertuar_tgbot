@@ -1,0 +1,5 @@
+/.venv/
+__pycache__/
+.idea/
+/repertuar_env.py
+/logs/
