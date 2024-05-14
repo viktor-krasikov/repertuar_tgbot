@@ -77,28 +77,41 @@ cursor.execute("""
 
 # Инициализация бота
 bot = telebot.TeleBot(env.TELEGRAM_BOT_TOKEN)
+telegram_admin_chat_id = None
+
+
+def send_admin_menu(chat_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn1 = types.KeyboardButton('/random')
+    btn2 = types.KeyboardButton('/random20')
+    btn3 = types.KeyboardButton('/stats')
+    btn4 = types.KeyboardButton('/add')
+    btn5 = types.KeyboardButton('/addcsv')
+    btn6 = types.KeyboardButton('/backup')
+    markup.add(btn1, btn2, btn3, btn4, btn5, btn6)
+    bot.send_message(chat_id, "Выберите пункт меню", reply_markup=markup)
+
+
+def send_client_menu(chat_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn1 = types.KeyboardButton('Случайная композиция')
+    btn2 = types.KeyboardButton('Заказать композицию')
+    btn3 = types.KeyboardButton('Написать отзыв')
+    btn4 = types.KeyboardButton('Поддержать музыканта')
+    markup.add(btn1, btn2, btn3, btn4)
+    bot.send_message(chat_id, "Выберите пункт меню", reply_markup=markup)
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
         global telegram_admin_chat_id
         if telegram_admin_chat_id is None:
             telegram_admin_chat_id = message.chat.id
-        btn1 = types.KeyboardButton('/random')
-        btn2 = types.KeyboardButton('/random20')
-        btn3 = types.KeyboardButton('/stats')
-        btn4 = types.KeyboardButton('/add')
-        btn5 = types.KeyboardButton('/addcsv')
-        btn6 = types.KeyboardButton('/backup')
-        markup.add(btn1, btn2, btn3, btn4, btn5, btn6)
+        send_admin_menu(message.chat.id)
     else:
-        btn1 = types.KeyboardButton('Случайная композиция')
-        btn2 = types.KeyboardButton('Заказать композицию')
-        btn3 = types.KeyboardButton('Написать отзыв')
-        btn4 = types.KeyboardButton('Поддержать музыканта')
-        markup.add(btn1, btn2, btn3, btn4)
-    bot.send_message(message.chat.id, "Добро пожаловать!", reply_markup=markup)
+        bot.send_message(message.chat.id, "Добро пожаловать!")
+        send_client_menu(message.chat.id)
 
 
 # Функция для получения количества музыкальных композиций
@@ -270,6 +283,31 @@ def callback_handler(call):
     if call.data.startswith("update_rating_"):
         repertuar_id, mark = re.findall(r"\d+", call.data)
         update_rating(call.message, int(repertuar_id), int(mark))
+
+
+@bot.message_handler(func=lambda message: message.text == 'Заказать композицию')
+def zakaz_song(message):
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+    itembtn = types.KeyboardButton('Назад')
+    markup.add(itembtn)
+    msg = bot.send_message(message.chat.id,
+                           "Введите название песни, которую вы хотели бы заказать или нажмите 'Назад' для возврата.",
+                           reply_markup=markup)
+    bot.register_next_step_handler(msg, send_composition_to_admin)
+
+
+def send_composition_to_admin(message):
+    if message.text.lower() != 'назад':
+        # TODO в таблицу какую-нибудь сохранять
+        composition = message.text
+        global telegram_admin_chat_id
+        if telegram_admin_chat_id is not None:
+            bot.send_message(telegram_admin_chat_id,
+                             f"Пользователь {message.from_user.username} заказал композицию: {composition}")
+            bot.send_message(message.chat.id, "Заявка отправлена")
+        else:
+            bot.send_message(message.chat.id, "Не удалось отправить заявку музыканту")
+    send_client_menu(message.chat.id)
 
 
 # Запуск бота
