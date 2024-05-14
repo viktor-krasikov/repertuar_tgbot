@@ -112,23 +112,15 @@ def add_to_database(message, title, artist, tags):
         mark = int(message.text)
         connect_if_need()
         cursor.execute(
-            "INSERT INTO repertuar (title, artist, tags, open_time, content, mark) VALUES (%s, %s, %s, NOW(), '', %s)",
+            "INSERT INTO repertuar (title, artist, tags, mark) VALUES (%s, %s, %s, %s)",
             (title, artist, tags, mark))
         db.commit()
         bot.send_message(message.chat.id, f"Музыкальное произведение '{title}' успешно добавлено!")
     except mysql.connector.errors.IntegrityError as e:
         bot.send_message(message.chat.id, f"Музыкальное произведение '{title}' уже есть в БД")
-    except mysql.connector.errors.DatabaseError as e:
+    except Exception as e:
         logger.error(e)
-        # if e.errno == 4031:  # mysql.connector.errors.DatabaseError: 4031 (HY000):
-        #     if try_count < 2:
-        #         connect_if_need()
-        #         add_to_database(message, title, artist, tags, try_count=try_count + 1)
-        #     else:
-        #         print(e)
-    except ValueError as e:
-        logger.error(e)
-        # bot.send_message(message.chat.id, "Оценка должна быть числом от 0 до 5.")
+        bot.send_message(message.chat.id, f"Ошибка при добавлении '{e}'")
 
 
 # Команда /addcsv для добавления нескольких музыкальных произведений из CSV
