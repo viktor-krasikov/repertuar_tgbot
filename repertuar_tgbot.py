@@ -179,10 +179,10 @@ def insert_csv(message):
 def random_music(message):
     connect_if_need()
     try:
-        cursor.execute("SELECT id, title, artist FROM repertuar ORDER BY RAND() LIMIT 1")
+        cursor.execute("SELECT id, title, artist, mark FROM repertuar ORDER BY RAND() LIMIT 1")
         result = cursor.fetchone()
         if result is not None:
-            id, title, artist = result
+            repertuar_id, title, artist, mark = result
     except mysql.connector.errors.DatabaseError as e:
         if e.errno == 4031:  # mysql.connector.errors.DatabaseError: 4031 (HY000):
             connect_if_need()
@@ -192,9 +192,10 @@ def random_music(message):
         return
 
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
-        markup = types.InlineKeyboardMarkup(row_width=6)
-        buttons = [types.InlineKeyboardButton(mark, callback_data=f"update_rating_{id}_{mark}")
-                   for mark in "012345"]
+        markup = types.InlineKeyboardMarkup(row_width=7)
+        buttons = [types.InlineKeyboardButton(i_mark + ("✔️" if i_mark == str(mark) else ""),
+                                              callback_data=f"update_rating_{repertuar_id}_{i_mark}")
+                   for i_mark in "012345"]
         markup.add(*buttons)
 
         bot.send_message(message.chat.id, f"{artist} - {title}",
@@ -212,7 +213,12 @@ def update_rating(message, repertuar_id, mark):
         db.commit()
 
         if rows_updated == 1:
-            bot.send_message(message.chat.id, "Оценка успешно сохранена!")
+            markup = types.InlineKeyboardMarkup(row_width=7)
+            buttons = [types.InlineKeyboardButton(i_mark + ("✔️" if i_mark == str(mark) else ""),
+                                                  callback_data=f"update_rating_{repertuar_id}_{i_mark}")
+                       for i_mark in "012345"]
+            markup.add(*buttons)
+            bot.edit_message_reply_markup(message.chat.id, message.id, reply_markup=markup)
         else:
             bot.send_message(message.chat.id, "Композиция не найдена в базе данных")
     except Exception as e:
@@ -223,8 +229,8 @@ def update_rating(message, repertuar_id, mark):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_handler(call):
     if call.data.startswith("update_rating_"):
-        id, mark = re.findall(r"\d+", call.data)
-        update_rating(call.message, int(id), int(mark))
+        repertuar_id, mark = re.findall(r"\d+", call.data)
+        update_rating(call.message, int(repertuar_id), int(mark))
 
 
 # Запуск бота
