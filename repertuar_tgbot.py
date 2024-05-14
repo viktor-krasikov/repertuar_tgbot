@@ -78,6 +78,45 @@ cursor.execute("""
 # Инициализация бота
 bot = telebot.TeleBot(env.TELEGRAM_BOT_TOKEN)
 
+@bot.message_handler(commands=['start'])
+def start(message):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
+        global telegram_admin_chat_id
+        if telegram_admin_chat_id is None:
+            telegram_admin_chat_id = message.chat.id
+        btn1 = types.KeyboardButton('/random')
+        btn2 = types.KeyboardButton('/random20')
+        btn3 = types.KeyboardButton('/stats')
+        btn4 = types.KeyboardButton('/add')
+        btn5 = types.KeyboardButton('/addcsv')
+        btn6 = types.KeyboardButton('/backup')
+        markup.add(btn1, btn2, btn3, btn4, btn5, btn6)
+    else:
+        btn1 = types.KeyboardButton('Случайная композиция')
+        btn2 = types.KeyboardButton('Заказать композицию')
+        btn3 = types.KeyboardButton('Написать отзыв')
+        btn4 = types.KeyboardButton('Поддержать музыканта')
+        markup.add(btn1, btn2, btn3, btn4)
+    bot.send_message(message.chat.id, "Добро пожаловать!", reply_markup=markup)
+
+
+# Функция для получения количества музыкальных композиций
+def get_song_count():
+    connect_if_need()
+    cursor.execute("SELECT COUNT(*) FROM repertuar")
+    count = cursor.fetchone()[0]
+    return count
+
+
+@bot.message_handler(commands=['stats'])
+def stats(message):
+    if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
+        count = get_song_count()
+        bot.send_message(message.chat.id, f"У вас {count} музыкальных композиций в репертуаре")
+    else:
+        bot.send_message(message.chat.id, "У вас нет доступа к этой команде")
+
 
 # Команда /add для добавления музыкального произведения
 @bot.message_handler(commands=['add'])
