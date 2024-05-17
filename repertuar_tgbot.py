@@ -231,10 +231,10 @@ def insert_csv(message):
 def random_music(message):
     connect_if_need()
     try:
-        cursor.execute("SELECT id, title, artist, mark FROM repertuar ORDER BY RAND() LIMIT 1")
+        cursor.execute("SELECT id, title, artist, mark, tags FROM repertuar ORDER BY RAND() LIMIT 1")
         result = cursor.fetchone()
         if result is not None:
-            repertuar_id, title, artist, mark = result
+            repertuar_id, title, artist, mark, tags = result
     except mysql.connector.errors.DatabaseError as e:
         if e.errno == 4031:  # mysql.connector.errors.DatabaseError: 4031 (HY000):
             connect_if_need()
@@ -243,6 +243,9 @@ def random_music(message):
         bot.send_message(message.chat.id, "Нет композиций в базе данных")
         return
 
+    # "80е,советские,ретро" => "#80е #советские #ретро"
+    tags_list = " ".join(["#" + tag.strip().replace(" ", "_") for tag in tags.split(',') if tag])
+
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
         markup = types.InlineKeyboardMarkup(row_width=7)
         buttons = [types.InlineKeyboardButton(i_mark + ("✔️" if i_mark == str(mark) else ""),
@@ -250,11 +253,11 @@ def random_music(message):
                    for i_mark in "012345"]
         markup.add(*buttons)
 
-        bot.send_message(message.chat.id, f"{artist} - {title}",
+        bot.send_message(message.chat.id, f"{artist} - {title}\n{tags_list}",
                          reply_markup=markup)
     #        bot.register_next_step_handler(message, update_rating, result[0])
     else:
-        bot.send_message(message.chat.id, f"{artist} - {title}")
+        bot.send_message(message.chat.id, f"{artist} - {title}\n{tags_list}")
 
 
 def update_rating(message, repertuar_id, mark):
