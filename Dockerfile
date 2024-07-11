@@ -1,5 +1,5 @@
 # Используем образ MySQL
-FROM mysql:5.7
+FROM mysql:8
 
 # Устанавливаем переменные окружения для инициализации БД
 ENV MYSQL_ROOT_PASSWORD=my_mysql_password

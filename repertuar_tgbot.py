@@ -48,7 +48,8 @@ def send_admin_menu(chat_id):
     btn4 = types.KeyboardButton('/add')
     btn5 = types.KeyboardButton('/addcsv')
     btn6 = types.KeyboardButton('/backup')
-    markup.add(btn1, btn2, btn3, btn4, btn5, btn6)
+    btn7 = types.KeyboardButton('/tags')
+    markup.add(btn1, btn2, btn3, btn4, btn5, btn6, btn7)
     bot.send_message(chat_id, "Выберите пункт меню", reply_markup=markup)
 
 
@@ -81,6 +82,12 @@ def stats(message):
         bot.send_message(message.chat.id, f"У вас {count} музыкальных композиций в репертуаре")
     else:
         bot.send_message(message.chat.id, "У вас нет доступа к этой команде")
+
+
+@bot.message_handler(commands=['tags'])
+def tags(message):
+    tag_list = storage.get_tags()
+    bot.send_message(message.chat.id, f"Список всех тегов: {tag_list}")
 
 
 # Команда /add для добавления музыкального произведения
