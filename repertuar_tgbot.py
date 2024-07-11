@@ -8,6 +8,7 @@ import telebot
 from telebot import types
 
 import repertuar_env as env
+from storage_manager.mysql_storage_manager import MysqlStorageManager
 
 # Создание директории для логов, если она еще не создана
 log_dir = 'logs'
@@ -32,48 +33,7 @@ logger.addHandler(handler)
 # Пример логирования
 logger.info('Repertuar bot started')
 
-db, cursor = None, None
-
-
-# Функция для проверки  соединения
-def is_connected():
-    if db is not None and cursor is not None:
-        try:
-            cursor.execute("SELECT 1")
-            result = cursor.fetchone()
-            if result is not None:
-                return True
-        except mysql.connector.Error as e:
-            logger.error(f"Error checking connection: {e}")
-        except Exception as e:
-            logger.error(f"Unknown error in is_connected: {e}")
-    return False
-
-
-# Подключение к базе данных MySQL
-def connect_if_need():
-    if not is_connected():
-        logger.info("Попытка соединения с БД")
-        global db, cursor
-        db = mysql.connector.connect(**env.MYSQL_CONNECTOR_PARAMS)
-        cursor = db.cursor()
-        logger.info("Соединение с БД установлено")
-
-
-# Создание таблицы 'repertuar', если её нет
-connect_if_need()
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS repertuar (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        title VARCHAR(255) DEFAULT '',
-        artist VARCHAR(255) DEFAULT '',
-        tags VARCHAR(255) DEFAULT '',
-        open_time TIMESTAMP DEFAULT NOW(),
-        content TEXT,
-        mark INT DEFAULT 0,
-        UNIQUE(title, artist)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-""");
+storage = MysqlStorageManager(logger, env.MYSQL_CONNECTOR_PARAMS)
 
 # Инициализация бота
 bot = telebot.TeleBot(env.TELEGRAM_BOT_TOKEN)
@@ -114,18 +74,10 @@ def start(message):
         send_client_menu(message.chat.id)
 
 
-# Функция для получения количества музыкальных композиций
-def get_song_count():
-    connect_if_need()
-    cursor.execute("SELECT COUNT(*) FROM repertuar")
-    count = cursor.fetchone()[0]
-    return count
-
-
 @bot.message_handler(commands=['stats'])
 def stats(message):
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
-        count = get_song_count()
+        count = storage.get_songs_count()
         bot.send_message(message.chat.id, f"У вас {count} музыкальных композиций в репертуаре")
     else:
         bot.send_message(message.chat.id, "У вас нет доступа к этой команде")
@@ -162,11 +114,7 @@ def add_mark(message, title, artist):
 def add_to_database(message, title, artist, tags):
     try:
         mark = int(message.text)
-        connect_if_need()
-        cursor.execute(
-            "INSERT INTO repertuar (title, artist, tags, mark) VALUES (%s, %s, %s, %s)",
-            (title, artist, tags, mark))
-        db.commit()
+        storage.add_song(title, artist, tags, mark)
         bot.send_message(message.chat.id, f"Музыкальное произведение '{title}' успешно добавлено!")
     except mysql.connector.errors.IntegrityError as e:
         bot.send_message(message.chat.id, f"Музыкальное произведение '{title}' уже есть в БД")
@@ -190,15 +138,11 @@ def insert_csv(message):
         music_data = message.text.split("\n")
         logger.info("Получено CSV-сообщение с " + str(len(music_data)) + " композиций")
         count_success, count_duplicates, count_dberror, count_error = 0, 0, 0, 0
-        connect_if_need()
         for data in music_data:
             try:
                 title, artist, tags = re.split(";", data)
                 logger.info(f"Добавляется: {artist}, {title}, {tags}")
-                cursor.execute(
-                    "INSERT INTO repertuar (title, artist, tags) VALUES (%s, %s, %s)",
-                    (title, artist, tags))
-                db.commit()
+                storage.add_song(title, artist, tags, 0)
                 count_success += 1
             except mysql.connector.errors.IntegrityError as e:
                 logger.error(e)
@@ -229,43 +173,32 @@ def insert_csv(message):
 # Команда /random для получения случайного музыкального произведения
 @bot.message_handler(commands=['random'])
 def random_music(message):
-    connect_if_need()
-    try:
-        cursor.execute("SELECT id, title, artist, mark, tags FROM repertuar ORDER BY RAND() LIMIT 1")
-        result = cursor.fetchone()
-        if result is not None:
-            repertuar_id, title, artist, mark, tags = result
-    except mysql.connector.errors.DatabaseError as e:
-        if e.errno == 4031:  # mysql.connector.errors.DatabaseError: 4031 (HY000):
-            connect_if_need()
-
-    if result is None:
+    song = storage.get_random_song()
+    if song is None:
         bot.send_message(message.chat.id, "Нет композиций в базе данных")
         return
 
     # "80е,советские,ретро" => "#80е #советские #ретро"
-    tags_list = " ".join(["#" + tag.strip().replace(" ", "_") for tag in tags.split(',') if tag])
+    tags_list = " ".join(["#" + tag.strip().replace(" ", "_") for tag in song.tags.split(',') if tag])
 
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
         markup = types.InlineKeyboardMarkup(row_width=7)
-        buttons = [types.InlineKeyboardButton(i_mark + ("✔️" if i_mark == str(mark) else ""),
-                                              callback_data=f"update_rating_{repertuar_id}_{i_mark}")
+        buttons = [types.InlineKeyboardButton(i_mark + ("✔️" if i_mark == str(song.mark) else ""),
+                                              callback_data=f"update_rating_{song.id}_{i_mark}")
                    for i_mark in "012345"]
+        buttons.append(types.InlineKeyboardButton("✍️", callback_data=f"edit_{song.id}"))
         markup.add(*buttons)
 
-        bot.send_message(message.chat.id, f"{artist} - {title}\n{tags_list}",
+        bot.send_message(message.chat.id, f"{song.artist} - {song.title}\n{tags_list}",
                          reply_markup=markup)
     #        bot.register_next_step_handler(message, update_rating, result[0])
     else:
-        bot.send_message(message.chat.id, f"{artist} - {title}\n{tags_list}")
+        bot.send_message(message.chat.id, f"{song.artist} - {song.title}\n{tags_list}")
 
 
 def update_rating(message, repertuar_id, mark):
-    connect_if_need()
     try:
-        cursor.execute("UPDATE repertuar SET mark = %s, open_time = NOW() WHERE id = %s", (mark, repertuar_id))
-        rows_updated = cursor.rowcount
-        db.commit()
+        rows_updated = storage.update_rating(repertuar_id, mark)
 
         if rows_updated == 1:
             markup = types.InlineKeyboardMarkup(row_width=7)
