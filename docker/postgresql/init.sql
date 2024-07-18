@@ -1,0 +1,3 @@
+CREATE DATABASE repertuar;
+CREATE USER viktorkrasikov WITH PASSWORD '123456';
+GRANT ALL PRIVILEGES ON DATABASE repertuar TO viktorkrasikov;

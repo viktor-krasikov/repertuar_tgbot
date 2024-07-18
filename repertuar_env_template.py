@@ -10,3 +10,10 @@ MYSQL_CONNECTOR_PARAMS = dict(
     password="my_mysql_password",
     charset='utf8mb4'
 )
+
+POSTGRESQL_CONNECTOR_PARAMS = dict(
+    host="localhost",
+    user="viktorkrasikov",
+    database="repertuar",
+    password="123456"
+)

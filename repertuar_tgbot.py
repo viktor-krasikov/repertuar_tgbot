@@ -9,6 +9,7 @@ from telebot import types
 
 import repertuar_env as env
 from storage_manager.mysql_storage_manager import MysqlStorageManager
+from storage_manager.postgresql_storage_manager import PostgresqlStorageManager
 
 # Создание директории для логов, если она еще не создана
 log_dir = 'logs'
@@ -33,7 +34,9 @@ logger.addHandler(handler)
 # Пример логирования
 logger.info('Repertuar bot started')
 
-storage = MysqlStorageManager(logger, env.MYSQL_CONNECTOR_PARAMS)
+# Оставьте нужный тип сервера, ненужный - закомментируйте
+# storage = MysqlStorageManager(logger, env.MYSQL_CONNECTOR_PARAMS)
+storage = PostgresqlStorageManager(logger, env.POSTGRESQL_CONNECTOR_PARAMS)
 
 # Инициализация бота
 bot = telebot.TeleBot(env.TELEGRAM_BOT_TOKEN)
