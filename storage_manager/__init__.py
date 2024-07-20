@@ -1,6 +1,7 @@
+from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from typing import List
-from abc import ABCMeta, abstractmethod, abstractproperty
+
 
 @dataclass(init=True)
 class Song:

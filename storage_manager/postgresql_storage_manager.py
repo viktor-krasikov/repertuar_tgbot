@@ -1,7 +1,8 @@
 import csv
 
-from storage_manager import Song, StorageManager
 import psycopg2
+
+from storage_manager import Song, StorageManager
 
 
 class PostgresqlStorageManager(StorageManager):
