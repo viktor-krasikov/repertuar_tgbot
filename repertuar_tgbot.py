@@ -137,47 +137,71 @@ def add_to_database(message, title, artist, tags):
 @bot.message_handler(commands=['addcsv'])
 def add_csv(message):
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
-        bot.send_message(message.chat.id, "Вставьте список мулькальных композиций в формате CSV:")
-        bot.register_next_step_handler(message, insert_csv)
+        bot.send_message(message.chat.id, "Вставьте список мулькальных композиций в формате CSV:\n"
+                                          "Название;Исполнитель;Тэги через запятую (не обязательно);"
+                                          "Оценка от 0 до 5 (не обязательно)\n\n"
+                                          "Или отправьте CSV-файл с вышеописанным содержимым.")
+        bot.register_next_step_handler(message, process_csv_input)  # Регистрируем следующий шаг обработки
     else:
         bot.send_message(message.chat.id, "У вас нет доступа к этой команде.")
 
 
-def insert_csv(message):
+def process_csv_input(message):
+    """Процесс обработки входного текста или файла"""
     if message.from_user.username == env.TELEGRAM_ADMIN_USERNAME:
-        music_data = message.text.split("\n")
-        logger.info("Получено CSV-сообщение с " + str(len(music_data)) + " композиций")
-        count_success, count_duplicates, count_dberror, count_error = 0, 0, 0, 0
-        for data in music_data:
-            try:
-                title, artist, tags = re.split(";", data)
-                logger.info(f"Добавляется: {artist}, {title}, {tags}")
-                storage.add_song(title, artist, tags, 0)
-                count_success += 1
-            except mysql.connector.errors.IntegrityError as e:
-                logger.error(e)
-                count_duplicates += 1
-            except mysql.connector.errors.DatabaseError as e:
-                logger.error(e)
-                count_dberror += 1
-            except Exception as e:
-                logger.error(e)
-                count_error += 1
-
-        if count_duplicates == 0 and count_error == 0:
-            bot.send_message(message.chat.id, f"Музыкальные композиции успешно добавлены ({count_success} шт)")
-        elif count_success > 0:
-            bot.send_message(message.chat.id, f"Музыкальные композиции успешно добавлены ({count_success} шт)\n"
-                                              f"Дубликатов - {count_duplicates} шт\n"
-                                              f"Ошибок с БД - {count_dberror} шт\n"
-                                              f"Прочих ошибок - {count_error} шт")
+        if message.content_type in ['text', 'document']:
+            if message.content_type == 'text':
+                music_data = message.text.split("\n")
+            elif message.content_type == 'document':
+                # Получаем файл
+                file_info = bot.get_file(message.document.file_id)
+                music_data = bot.download_file(file_info.file_path).decode('utf-8').split("\n")
+            result_as_text = insert_csv_data(music_data)
+            bot.send_message(message.chat.id, result_as_text)
         else:
-            bot.send_message(message.chat.id, f"Музыкальные композиции не были добавлены:\n"
-                                              f"Дубликатов - {count_duplicates} шт\n"
-                                              f"Ошибок с БД - {count_dberror} шт\n"
-                                              f"Прочих ошибок - {count_error} шт")
+            bot.send_message(chat_id=message.chat.id,
+                             text="Неподдерживаемый тип сообщения. Пожалуйста, отправьте текст или CSV-файл.")
     else:
         bot.send_message(message.chat.id, "У вас нет доступа к этой команде.")
+
+
+def insert_csv_data(music_data):
+    logger.info("Получено CSV-сообщение с " + str(len(music_data)) + " композиций")
+    count_success, count_duplicates, count_dberror, count_error, count_skipped = 0, 0, 0, 0, 0
+    for data in music_data:
+        row = re.split(";", data)
+        if 2 <= len(row) <= 4:
+            title, artist = row[0], row[1]
+            tags = row[2] if len(row) > 2 else ""
+            mark = row[3] if len(row) > 3 else 0
+            logger.info(f"Добавляется: {artist}, {title}, {tags}, {mark}")
+            result = storage.add_song(title, artist, tags, mark)
+            if result == 0:
+                count_success += 1
+            elif result == 1:
+                count_duplicates += 1
+            elif result == 2:
+                count_dberror += 1
+            else:
+                count_error += 1
+        else:
+            count_skipped += 1
+
+    if count_duplicates == 0 and count_dberror == 0 and count_error == 0 and count_skipped == 0:
+        result_text = f"Музыкальные композиции успешно добавлены ({count_success} шт)"
+    elif count_success > 0:
+        result_text = f"Музыкальные композиции успешно добавлены ({count_success} шт)\n" \
+                      f"Дубликатов - {count_duplicates} шт\n" \
+                      f"Ошибок с БД - {count_dberror} шт\n" \
+                      f"Прочих ошибок - {count_error} шт\n" \
+                      f"Пропущено - {count_skipped} шт"
+    else:
+        result_text = f"Музыкальные композиции не были добавлены:\n" \
+                      f"Дубликатов - {count_duplicates} шт\n" \
+                      f"Ошибок с БД - {count_dberror} шт\n" \
+                      f"Прочих ошибок - {count_error} шт\n" \
+                      f"Пропущено - {count_skipped} шт"
+    return result_text
 
 
 # Команда /random для получения случайного музыкального произведения
@@ -254,6 +278,19 @@ def send_composition_to_admin(message):
         else:
             bot.send_message(message.chat.id, "Не удалось отправить заявку музыканту")
     send_client_menu(message.chat.id)
+
+
+@bot.message_handler(commands=['backup'])
+def backup_command(message):
+    """Обработчик команды /backup"""
+    try:
+        file_path = 'backup_repertuar.csv'  # Путь к файлу
+        backup_file = storage.backup(file_path)
+        with open(backup_file, 'rb') as file:
+            bot.send_document(chat_id=message.chat.id, document=file)
+        os.remove(backup_file)  # Удаляем файл после отправки
+    except Exception as e:
+        bot.send_message(chat_id=message.chat.id, text=f"Произошла ошибка: {str(e)}")
 
 
 # Запуск бота

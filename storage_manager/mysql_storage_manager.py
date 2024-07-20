@@ -90,9 +90,37 @@ class MysqlStorageManager(StorageManager):
         self.db.commit()
         return rows_updated
 
-    def add_song(self, title, artist, tags, mark):
-        self.connect_if_need()
-        self.cursor.execute(
-            "INSERT INTO repertuar (title, artist, tags, mark) VALUES (%s, %s, %s, %s)",
-            (title, artist, tags, mark))
-        self.db.commit()
+    def add_song(self, title, artist, tags, mark=0):
+        try:
+            self.connect_if_need()
+            self.cursor.execute(
+                "INSERT INTO repertuar (title, artist, tags, mark) VALUES (%s, %s, %s, %s)",
+                (title, artist, tags, mark))
+            self.db.commit()
+            return 0
+        except mysql.connector.errors.IntegrityError as e:
+            self.logger.error(e)
+            return 1  # дубль
+        except mysql.connector.errors.DatabaseError as e:
+            self.logger.error(e)
+            return 2
+        except Exception as e:
+            self.logger.error(e)
+        return 99
+
+
+def backup(self, file_path):
+    """Выгрузка всех композиций в CSV файл."""
+    self.connect_if_need()
+    self.cursor.execute("SELECT title, artist, tags, mark FROM repertuar")
+    rows = self.cursor.fetchall()
+
+    # Запись данных в CSV файл
+    with open(file_path, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file, delimiter=';')  # Используем точку с запятой в качестве разделителя
+        # Запись данных
+        for row in rows:
+            writer.writerow(row)
+
+    self.logger.info(f"Бэкап завершён. Файл сохранен по пути: {file_path}")
+    return file_path
