@@ -75,16 +75,11 @@ class MysqlStorageManager(StorageManager):
 
     def get_random_song(self) -> Song:
         self.connect_if_need()
-        try:
-            self.cursor.execute("SELECT id, title, artist, tags, mark FROM repertuar ORDER BY RAND() LIMIT 1")
-            result = self.cursor.fetchone()
-            if result is not None:
-                id, title, artist, tags, mark = result
-                return Song(id, title, artist, tags, mark)
-
-        except mysql.connector.errors.DatabaseError as e:
-            if e.errno == 4031:  # mysql.connector.errors.DatabaseError: 4031 (HY000):
-                self.connect_if_need()
+        self.cursor.execute("SELECT id, title, artist, tags, mark FROM repertuar ORDER BY RAND() LIMIT 1")
+        result = self.cursor.fetchone()
+        if result is not None:
+            id, title, artist, tags, mark = result
+            return Song(id, title, artist, tags, mark)
 
     def update_rating(self, song_id, mark):
         self.connect_if_need()
