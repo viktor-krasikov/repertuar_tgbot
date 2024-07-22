@@ -3,7 +3,6 @@ import os
 import re
 from logging.handlers import RotatingFileHandler
 
-import mysql.connector
 import telebot
 from telebot import types
 
@@ -122,15 +121,14 @@ def add_mark(message, title, artist):
 
 
 def add_to_database(message, title, artist, tags):
-    try:
-        mark = int(message.text)
-        storage.add_song(title, artist, tags, mark)
+    mark = int(message.text)
+    result = storage.add_song(title, artist, tags, mark)
+    if result == 0:
         bot.send_message(message.chat.id, f"Музыкальное произведение '{title}' успешно добавлено!")
-    except mysql.connector.errors.IntegrityError as e:
+    elif result == 1:
         bot.send_message(message.chat.id, f"Музыкальное произведение '{title}' уже есть в БД")
-    except Exception as e:
-        logger.error(e)
-        bot.send_message(message.chat.id, f"Ошибка при добавлении '{e}'")
+    else:
+        bot.send_message(message.chat.id, f"Ошибка при добавлении")
 
 
 # Команда /addcsv для добавления нескольких музыкальных произведений из CSV
