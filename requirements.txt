@@ -1,8 +1,10 @@
 ﻿certifi==2024.7.4
 charset-normalizer==3.3.2
 idna==3.7
-mysql==0.0.3
-mysqlclient==2.2.4
+## Для MySQL - раскомментируйте mysql* библиотеки и закомментируйте psycopg2, для PostgreSQL - наоборот
+# mysql==0.0.3
+# mysql-connector-python==9.0.0
+# mysqlclient==2.2.4
 psycopg2==2.9.9
 pyTelegramBotAPI==4.21.0
 requests==2.32.3
