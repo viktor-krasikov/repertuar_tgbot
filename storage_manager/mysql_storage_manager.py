@@ -106,19 +106,18 @@ class MysqlStorageManager(StorageManager):
             self.logger.error(e)
         return 99
 
+    def backup(self, file_path):
+        """Выгрузка всех композиций в CSV файл."""
+        self.connect_if_need()
+        self.cursor.execute("SELECT title, artist, tags, mark FROM repertuar")
+        rows = self.cursor.fetchall()
 
-def backup(self, file_path):
-    """Выгрузка всех композиций в CSV файл."""
-    self.connect_if_need()
-    self.cursor.execute("SELECT title, artist, tags, mark FROM repertuar")
-    rows = self.cursor.fetchall()
+        # Запись данных в CSV файл
+        with open(file_path, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file, delimiter=';')  # Используем точку с запятой в качестве разделителя
+            # Запись данных
+            for row in rows:
+                writer.writerow(row)
 
-    # Запись данных в CSV файл
-    with open(file_path, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file, delimiter=';')  # Используем точку с запятой в качестве разделителя
-        # Запись данных
-        for row in rows:
-            writer.writerow(row)
-
-    self.logger.info(f"Бэкап завершён. Файл сохранен по пути: {file_path}")
-    return file_path
+        self.logger.info(f"Бэкап завершён. Файл сохранен по пути: {file_path}")
+        return file_path
